@@ -85,7 +85,7 @@ Body Markdown here (max 10000 chars).
 | `npm run smoke`    | 侧栏/语言/路由守卫（`scripts/smoke.mjs`） |
 | `npm run verify`   | `check` + `test` + `smoke`（CI 执行此项） |
 
-发版自动化：推送 `v*` 标签即触发 `.github/workflows/release.yml`（`npm run verify`、`npm publish` 到 npm + GitHub Packages、`gh release create --generate-notes`）。
+发版自动化：推送 `v*` 标签即触发 `.github/workflows/release.yml`（`npm run verify`、`npm publish` 到 npm、`gh release create --generate-notes`）。
 
 ## i18n
 

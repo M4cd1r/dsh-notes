@@ -85,7 +85,7 @@ Fields: `id` (uuid), `title`, `workspace`, `sessionId` (empty when none), `categ
 | `npm run smoke`  | sidebar/locales/routes guard (`scripts/smoke.mjs`) |
 | `npm run verify` | `check` + `test` + `smoke` (CI runs this) |
 
-Releases are automatic: pushing a `v*` tag runs `.github/workflows/release.yml` (`npm run verify`, `npm publish` to npm + GitHub Packages, `gh release create --generate-notes`).
+Releases are automatic: pushing a `v*` tag runs `.github/workflows/release.yml` (`npm run verify`, `npm publish` to npm, `gh release create --generate-notes`).
 
 ## i18n
 
