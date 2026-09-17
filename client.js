@@ -97,7 +97,7 @@
           const hostEl = document.createElement('div');
           hostEl.setAttribute('data-dsh-notes', 'page');
           hostEl.setAttribute('data-dsh-plugin', 'notes');
-          if (mainEl) {
+          if (mainEl && mainEl.parentNode) {
             pageState = { mounted: true, mode: 'page', prevDisplay: mainEl.style.display, mainEl, hostEl, root: null, ctx };
             mainEl.style.display = 'none';
             mainEl.parentNode.insertBefore(hostEl, mainEl.nextSibling);
@@ -132,10 +132,41 @@
           let NotesPage = null;
           try { NotesPage = (typeof buildNotesPage === 'function') ? buildNotesPage(React, primitives) : () => React.createElement('div', null, 'Notes (Task 8)'); }
           catch (e) { report('notes-page-build', e && e.message ? e.message : e); NotesPage = () => React.createElement('div', null, 'Notes (Task 8)'); }
+          class Boundary extends React.Component {
+            constructor(props) { super(props); this.state = { crashed: false }; }
+            static getDerivedStateFromError() { return { crashed: true }; }
+            componentDidCatch(error) { report('render-crash', error && error.message ? error.message : error); }
+            render() { return this.state.crashed ? null : this.props.children; }
+          }
+          const guard = (Component) => function Guarded(props) {
+            return React.createElement(Boundary, null, React.createElement(Component, props));
+          };
+          let ShippedTooltip = null;
+          try { ShippedTooltip = primitives && primitives.Tooltip ? primitives.Tooltip : null; } catch { ShippedTooltip = null; }
+          function Tooltip(props) {
+            if (ShippedTooltip) return React.createElement(ShippedTooltip, props);
+            const child = props ? props.children : null;
+            const tip = props && typeof props.label === 'string' ? props.label : '';
+            if (!React.isValidElement(child) || tip === '') return child === undefined ? null : child;
+            return React.cloneElement(child, { title: child.props && child.props.title ? child.props.title : tip });
+          }
+          function SidebarEntry() {
+            const label = 'Notes & bookmarks';
+            return React.createElement(Tooltip, { label, side: 'right', delayMs: 400 },
+              React.createElement('button', {
+                type: 'button',
+                'data-dsh-notes': 'entry',
+                title: label,
+                'aria-label': label,
+                onClick: () => { try { mountNotesPanel(ctx, React, createRoot, NotesPage); } catch (error) { report('entry-open', error && error.message ? error.message : error); } },
+              },
+                React.createElement(BookmarkIcon, { React }),
+              ));
+          }
           try {
             ctx.effect(() => slots.inject('sidebar.footer.action', () => slots.register(
-              { name: 'sidebar.footer.action', id: 'notes', order: 21, label: 'Notes & bookmarks', icon: (p) => React.createElement(BookmarkIcon, { React }) },
-              { onClick: () => mountNotesPanel(ctx, React, createRoot, NotesPage) }
+              { name: 'sidebar.footer.action', id: 'notes', order: 21, label: 'Notes & bookmarks' },
+              guard(SidebarEntry),
             )), 'dsh-notes: sidebar entry');
           } catch (e) { report('sidebar-register', e && e.message ? e.message : e); }
         }
