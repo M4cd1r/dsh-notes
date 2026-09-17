@@ -12,7 +12,7 @@ export function normalizeTags(tags) {
   for (const raw of tags) {
     if (typeof raw !== 'string') continue;
     const t = raw.trim();
-    if (t === '' || t.length > LIMITS.tagLen || seen.has(t)) continue;
+    if (t === '' || [...t].length > LIMITS.tagLen || seen.has(t)) continue;
     seen.add(t);
     out.push(t);
     if (out.length >= LIMITS.tags) break;
@@ -27,10 +27,10 @@ export function defaultManualMeta(locale) {
 export function validateNoteObject(note) {
   if (!note || typeof note !== 'object') return { ok: false, error: 'bad-note' };
   if (typeof note.id !== 'string' || !UUID_RE.test(note.id)) return { ok: false, error: 'bad-id' };
-  if (typeof note.title !== 'string' || note.title.trim() === '' || [...note.title].length > LIMITS.title) {
+  if (typeof note.title !== 'string' || note.title.trim() === '' || [...note.title.trim()].length > LIMITS.title) {
     return { ok: false, error: 'bad-title' };
   }
-  if (typeof note.workspace !== 'string' || note.workspace.trim() === '' || note.workspace.length > 160) {
+  if (typeof note.workspace !== 'string' || note.workspace.trim() === '' || [...note.workspace.trim()].length > 160) {
     return { ok: false, error: 'bad-workspace' };
   }
   if (note.sessionId !== null && note.sessionId !== undefined && typeof note.sessionId !== 'string') {
@@ -42,7 +42,7 @@ export function validateNoteObject(note) {
   const tags = normalizeTags(note.tags);
   if (typeof note.body !== 'string') return { ok: false, error: 'bad-body' };
   if ([...note.body].length > LIMITS.body) return { ok: false, error: 'too-long' };
-  if (typeof note.createdAt !== 'number' || typeof note.updatedAt !== 'number') return { ok: false, error: 'bad-time' };
+  if (!Number.isInteger(note.createdAt) || !Number.isInteger(note.updatedAt)) return { ok: false, error: 'bad-time' };
   if (note.updatedAt < note.createdAt) return { ok: false, error: 'bad-time' };
   return { ok: true, value: { ...note, title: note.title.trim(), workspace: note.workspace.trim(), tags } };
 }

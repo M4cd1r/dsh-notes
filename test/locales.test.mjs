@@ -7,7 +7,7 @@ const KEYS = ['notes.title', 'notes.new', 'notes.search', 'notes.filterWorkspace
   'notes.preview', 'notes.edit', 'notes.save', 'notes.cancel', 'notes.delete', 'notes.deleteConfirm',
   'notes.charLimit', 'notes.sessionOpen', 'notes.sessionMissing', 'notes.createdAt', 'notes.updatedTitle',
   'notes.empty', 'notes.emptySearch', 'notes.invalidNote', 'notes.fixByResave',
-  'notes.errorTooLong', 'notes.errorLoadFailed', 'notes.errorSaveFailed',
+  'notes.errorTooLong', 'notes.errorLoadFailed', 'notes.errorSaveFailed', 'notes.close',
   'cat.idea', 'cat.task', 'cat.session', 'cat.link', 'cat.note', 'tag.noteDefault'];
 
 test('client.js embeds zh+en locales with identical key sets', () => {

@@ -42,7 +42,7 @@ npm i dsh-notes
 
 ## 工具
 
-宿主注册六个 agent 工具，外加两条 HTTP 路由（`GET /dsh-notes/state`、`POST /dsh-notes/action`）。
+宿主注册六个 agent 工具，外加三条 HTTP 路由（`GET /dsh-notes/state`、`POST /dsh-notes/action`、`POST /dsh-notes/report`）。
 
 | 工具              | 参数                                                                | 返回             |
 | ----------------- | ------------------------------------------------------------------- | ---------------- |
@@ -53,7 +53,7 @@ npm i dsh-notes
 | `notes.update`    | `{ id, title?, body?, tags?, category? }`                           | 更新后的 note 对象 |
 | `notes.delete`    | `{ id }`                                                            | `true`           |
 
-HTTP API 与服务一一对应：`GET /dsh-notes/state?workspace=<id>` 返回 `{ ok, notes, invalid }`；`POST /dsh-notes/action` 接受 `{ action: "create" | "update" | "delete", args }`。非法文件计入 `invalid`，重新保存即可修复，不会崩溃。
+HTTP API 与服务一一对应：`GET /dsh-notes/state?workspace=<id>` 返回 `{ ok, notes, invalid }`；`POST /dsh-notes/action` 接受 `{ action: "create" | "update" | "delete" | "repair", args }`（`repair` 接受 `{ file, note }`，用于重新保存损坏文件）；`POST /dsh-notes/report` 接受客户端错误上报 `{ level, kind, message }`（恒返回 `{ ok: true }`）。非法文件计入 `invalid`，重新保存即可修复，不会崩溃。
 
 ## 回退：带 frontmatter 的纯 Markdown 文件
 

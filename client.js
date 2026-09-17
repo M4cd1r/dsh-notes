@@ -23,7 +23,7 @@
             'notes.empty': '还没有笔记。用上方按钮创建第一条。', 'notes.emptySearch': '没有匹配的笔记。',
             'notes.invalidNote': '文件格式无效:{error}', 'notes.fixByResave': '重新保存修复',
             'notes.errorTooLong': '正文超过 10000 字,无法保存。', 'notes.errorLoadFailed': '加载失败,重试。',
-            'notes.errorSaveFailed': '保存失败:{error}',
+            'notes.errorSaveFailed': '保存失败:{error}', 'notes.close': '关闭',
             'cat.idea': '想法', 'cat.task': '任务', 'cat.session': '会话', 'cat.link': '链接', 'cat.note': '笔记',
             'tag.noteDefault': '笔记',
           },
@@ -38,7 +38,7 @@
             'notes.empty': 'No notes yet. Create the first one above.', 'notes.emptySearch': 'No matching notes.',
             'notes.invalidNote': 'Invalid file: {error}', 'notes.fixByResave': 'Fix by re-saving',
             'notes.errorTooLong': 'Body exceeds 10,000 chars — not saved.', 'notes.errorLoadFailed': 'Load failed — retry.',
-            'notes.errorSaveFailed': 'Save failed: {error}',
+            'notes.errorSaveFailed': 'Save failed: {error}', 'notes.close': 'Close',
             'cat.idea': 'Idea', 'cat.task': 'Task', 'cat.session': 'Session', 'cat.link': 'Link', 'cat.note': 'Note',
             'tag.noteDefault': 'note',
           },
@@ -160,6 +160,7 @@
             const [workspaceFilter, setWorkspaceFilter] = React.useState('');
             const [categoryFilter, setCategoryFilter] = React.useState('');
             const [selectedId, setSelectedId] = React.useState(null);
+            const [repairFile, setRepairFile] = React.useState(null);
             const [mode, setMode] = React.useState('preview');
             const [draftTitle, setDraftTitle] = React.useState('');
             const [draftBody, setDraftBody] = React.useState('');
@@ -208,9 +209,12 @@
             });
 
             const isNew = selectedId === NOTES_NEW_ID;
-            const selected = isNew
+            const isRepair = repairFile !== null;
+            const selected = isRepair
+              ? { id: repairFile, title: draftTitle, body: draftBody, workspace: workspaceFilter || '', category: 'note', tags: [t('tag.noteDefault')], sessionId: null, createdAt: Date.now(), updatedAt: Date.now() }
+              : (isNew
               ? { id: NOTES_NEW_ID, title: draftTitle, body: draftBody, workspace: workspaceFilter || '', category: 'note', tags: [t('tag.noteDefault')], sessionId: null, createdAt: Date.now(), updatedAt: Date.now() }
-              : (notes.find((n) => n && n.id === selectedId) || null);
+              : (notes.find((n) => n && n.id === selectedId) || null));
 
             function fmtDate(ts) {
               try { return new Date(ts).toLocaleString(locale); } catch { return ''; }
@@ -221,6 +225,7 @@
 
             function pick(id) {
               const n = notes.find((x) => x && x.id === id) || null;
+              setRepairFile(null);
               setSelectedId(id);
               setDraftTitle(n ? (n.title || '') : '');
               setDraftBody(n && n.body ? n.body : '');
@@ -228,6 +233,7 @@
             }
 
             function startNew() {
+              setRepairFile(null);
               setSelectedId(NOTES_NEW_ID);
               setDraftTitle('');
               setDraftBody('');
@@ -249,20 +255,54 @@
               setError(t('notes.errorSaveFailed', { error: String((e && e.message) || e) }));
             }
 
+            function repairNote() {
+              const base = String(repairFile || '').replace(/\.md$/, '');
+              let id = base;
+              if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+                try {
+                  if (typeof crypto !== 'undefined' && crypto && typeof crypto.randomUUID === 'function') id = crypto.randomUUID();
+                  else throw new Error('no-uuid');
+                } catch {
+                  id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+                    const r = Math.floor(Math.random() * 16);
+                    return (c === 'x' ? r : ((r & 0x3) | 0x8)).toString(16);
+                  });
+                }
+              }
+              const now = Date.now();
+              return {
+                id, title: draftTitle, workspace: workspaceFilter || 'default', sessionId: null,
+                category: 'note', tags: [t('tag.noteDefault')], source: 'manual',
+                createdAt: now, updatedAt: now, body: draftBody,
+              };
+            }
+
             function save() {
               const len = [...draftBody].length;
+              if (draftTitle.trim() === '') { setError(t('notes.errorSaveFailed', { error: t('notes.updatedTitle') })); return; }
               if (len > NOTES_LIMIT) { setError(t('notes.errorTooLong')); return; }
-              const payload = isNew
+              const payload = isRepair
+                ? { action: 'repair', args: { file: repairFile, note: repairNote() } }
+                : (isNew
                 ? { action: 'create', args: { title: draftTitle, body: draftBody, workspace: workspaceFilter || undefined, category: 'note', tags: [t('tag.noteDefault')] } }
-                : { action: 'update', args: { id: selectedId, title: draftTitle, body: draftBody } };
+                : { action: 'update', args: { id: selectedId, title: draftTitle, body: draftBody } });
               postNotesAction(payload).then((data) => {
                 if (isNew && data && data.note && data.note.id) setSelectedId(data.note.id);
+                if (isRepair) {
+                  setRepairFile(null);
+                  setMode('preview');
+                  if (data && data.note && data.note.id) {
+                    setSelectedId(data.note.id);
+                    setDraftTitle(data.note.title || '');
+                    setDraftBody(data.note.body || '');
+                  }
+                }
                 afterMutation(data);
               }).catch(failSave);
             }
 
             function removeNote() {
-              if (isNew || !selected) return;
+              if (isNew || isRepair || !selected) return;
               let ok = false;
               try { ok = confirm(t('notes.deleteConfirm')); } catch { ok = false; }
               if (!ok) return;
@@ -274,12 +314,14 @@
             }
 
             function fixInvalid(entry) {
-              const id = String((entry && entry.file) || '').replace(/\.md$/, '');
-              const found = notes.find((n) => n && n.id === id);
-              const args = found
-                ? { id: found.id, title: found.title, body: found.body }
-                : { id, title: id, body: '' };
-              postNotesAction({ action: 'update', args }).then(afterMutation).catch(failSave);
+              const file = String((entry && entry.file) || '');
+              if (file === '') return;
+              setRepairFile(file);
+              setSelectedId(null);
+              setDraftTitle(file.replace(/\.md$/, ''));
+              setDraftBody(entry && typeof entry.content === 'string' ? entry.content : '');
+              setMode('edit');
+              setError('');
             }
 
             function openSession(sid) {
@@ -316,7 +358,7 @@
               React.createElement('button', { type: 'button', onClick: toggleLocale }, locale === 'zh' ? 'EN' : '中文'),
               React.createElement('button', { type: 'button', onClick: startNew }, t('notes.new')),
               props && props.onClose
-                ? React.createElement('button', { type: 'button', onClick: props.onClose, 'aria-label': 'close' }, '×')
+                ? React.createElement('button', { type: 'button', onClick: props.onClose, 'aria-label': t('notes.close') }, '×')
                 : null);
 
             let listBody = null;
@@ -363,6 +405,7 @@
                   React.createElement('button', {
                     type: 'button',
                     onClick: () => {
+                      setRepairFile(null);
                       setDraftTitle(selected.title || '');
                       setDraftBody(selected.body || '');
                       setMode('preview');
@@ -425,8 +468,9 @@
             if (!React.isValidElement(child) || tip === '') return child === undefined ? null : child;
             return React.cloneElement(child, { title: child.props && child.props.title ? child.props.title : tip });
           }
+          const entryLabel = makeNotesT(lang)('notes.title');
           function SidebarEntry() {
-            const label = 'Notes & bookmarks';
+            const label = entryLabel;
             return React.createElement(Tooltip, { label, side: 'right', delayMs: 400 },
               React.createElement('button', {
                 type: 'button',
@@ -440,7 +484,7 @@
           }
           try {
             ctx.effect(() => slots.inject('sidebar.footer.action', () => slots.register(
-              { name: 'sidebar.footer.action', id: 'notes', order: 21, label: 'Notes & bookmarks' },
+              { name: 'sidebar.footer.action', id: 'notes', order: 21, label: entryLabel },
               guard(SidebarEntry),
             )), 'dsh-notes: sidebar entry');
           } catch (e) { report('sidebar-register', e && e.message ? e.message : e); }

@@ -50,6 +50,7 @@ export function watchNotesDir(dir, onChange) {
         try { onChange && onChange(); } catch { /* ignore */ }
       }, 150);
     });
+    try { if (watcher && typeof watcher.on === 'function') watcher.on('error', () => {}); } catch { /* ignore */ }
   } catch {
     return () => {};
   }

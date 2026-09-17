@@ -1,6 +1,6 @@
 // src/store.mjs
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import { validateNoteObject } from './schema.mjs';
 
 const SEP = '---\n';
@@ -88,6 +88,21 @@ export function writeNoteAtomic(dir, note) {
   return target;
 }
 
+export function writeNoteFileAtomic(dir, filename, note) {
+  if (typeof filename !== 'string' || filename === '' || !filename.endsWith('.md')) throw new Error('bad-filename');
+  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) throw new Error('bad-filename');
+  if (basename(filename) !== filename) throw new Error('bad-filename');
+  const r = validateNoteObject(note);
+  if (!r.ok) throw new Error(r.error);
+  mkdirSync(dir, { recursive: true });
+  const text = serializeNoteFile(r.value);
+  const target = join(dir, filename);
+  const tmp = target + `.tmp-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  writeFileSync(tmp, text, 'utf8');
+  renameSync(tmp, target);
+  return target;
+}
+
 export function scanNotesDir(dir) {
   const notes = [];
   const invalid = [];
@@ -103,9 +118,9 @@ export function scanNotesDir(dir) {
       const text = readFileSync(join(dir, file), 'utf8');
       const r = parseNoteFile(text);
       if (r.ok) notes.push(r.value);
-      else invalid.push({ file, error: r.error });
+      else invalid.push({ file, error: r.error, content: text.slice(0, 12000) });
     } catch (e) {
-      invalid.push({ file, error: String((e && e.message) || e) });
+      invalid.push({ file, error: String((e && e.message) || e), content: '' });
     }
   }
   notes.sort((a, b) => b.updatedAt - a.updatedAt);

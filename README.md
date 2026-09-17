@@ -42,7 +42,7 @@ List/search results are capped (`list` default 100 / max 200, `search` max 100).
 
 ## Tools
 
-The host registers six agent tools plus two HTTP routes (`GET /dsh-notes/state`, `POST /dsh-notes/action`).
+The host registers six agent tools plus three HTTP routes (`GET /dsh-notes/state`, `POST /dsh-notes/action`, `POST /dsh-notes/report`).
 
 | Tool            | Args                                                                 | Returns              |
 | --------------- | -------------------------------------------------------------------- | -------------------- |
@@ -53,7 +53,7 @@ The host registers six agent tools plus two HTTP routes (`GET /dsh-notes/state`,
 | `notes.update`  | `{ id, title?, body?, tags?, category? }`                            | updated note object  |
 | `notes.delete`  | `{ id }`                                                             | `true`               |
 
-HTTP API mirrors the service: `GET /dsh-notes/state?workspace=<id>` returns `{ ok, notes, invalid }`; `POST /dsh-notes/action` accepts `{ action: "create" | "update" | "delete", args }`. Invalid files are reported in `invalid` and can be repaired by re-saving.
+HTTP API mirrors the service: `GET /dsh-notes/state?workspace=<id>` returns `{ ok, notes, invalid }`; `POST /dsh-notes/action` accepts `{ action: "create" | "update" | "delete" | "repair", args }` (`repair` takes `{ file, note }` and re-saves a broken file); `POST /dsh-notes/report` accepts client error reports `{ level, kind, message }` (always `{ ok: true }`). Invalid files are reported in `invalid` and can be repaired by re-saving.
 
 ## Fallback: plain Markdown files with frontmatter
 

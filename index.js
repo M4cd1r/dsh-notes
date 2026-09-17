@@ -2,8 +2,8 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import os from 'node:os';
-import { appendFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
-import { scanNotesDir, searchNotes, writeNoteAtomic } from './src/store.mjs';
+import { appendFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs';
+import { scanNotesDir, searchNotes, writeNoteAtomic, writeNoteFileAtomic } from './src/store.mjs';
 import { createIndex, watchNotesDir } from './src/index-state.mjs';
 import { defaultManualMeta, validateNoteObject } from './src/schema.mjs';
 
@@ -77,7 +77,9 @@ export function apply(ctx) {
       search(q, filter = {}) {
         return searchNotes(index.list(filter), q).slice(0, 100);
       },
-      create(input = {}, origin = {}) {
+      create(input, origin) {
+        input = input ?? {};
+        origin = origin ?? {};
         const now = Date.now();
         const locale = origin.locale === 'zh' ? 'zh' : 'en';
         const auto = input.category || input.tags ? {} : defaultManualMeta(locale);
@@ -99,7 +101,8 @@ export function apply(ctx) {
         index.upsert(checked.value);
         return checked.value;
       },
-      update(id, patch = {}) {
+      update(id, patch) {
+        patch = patch ?? {};
         const prev = service.get(id);
         if (!prev) throw new Error('not-found');
         const next = {
@@ -119,9 +122,16 @@ export function apply(ctx) {
       remove(id) {
         const prev = service.get(id);
         if (!prev) throw new Error('not-found');
-        try { unlinkSync(join(dir, `${id}.md`)); } catch { /* already gone */ }
+        try { unlinkSync(join(dir, `${id}.md`)); } catch (e) { if (!e || e.code !== 'ENOENT') throw e; }
         index.remove(id);
         return true;
+      },
+      repair(file, note) {
+        const checked = validateNoteObject(note);
+        if (!checked.ok) throw new Error(checked.error);
+        writeNoteFileAtomic(dir, file, checked.value);
+        try { index.rebuild(scanNotesDir(dir)); } catch (e) { safeLog(ctx, e); index.upsert(checked.value); }
+        return checked.value;
       },
     };
 
@@ -160,20 +170,28 @@ export function apply(ctx) {
             if (action === 'create') sendJson(res, 200, { ok: true, note: service.create(args, { source: 'manual' }) });
             else if (action === 'update') sendJson(res, 200, { ok: true, note: service.update(args.id, args) });
             else if (action === 'delete') sendJson(res, 200, { ok: true, deleted: service.remove(args.id) });
+            else if (action === 'repair') sendJson(res, 200, { ok: true, note: service.repair(args.file, args.note) });
             else sendJson(res, 400, { ok: false, error: 'bad-action' });
           } catch (e) {
             const msg = String((e && e.message) || e);
-            sendJson(res, msg === 'too-long' ? 400 : 500, { ok: false, error: msg });
+            const code = (msg === 'not-found' || msg === 'bad-filename') ? 404
+              : (/^(bad-|too-long)/.test(msg) ? 400 : 500);
+            sendJson(res, code, { ok: false, error: msg });
           }
         });
         ctx.route('POST', '/dsh-notes/report', (req, res) => {
           try {
             let raw = '';
             req.on('data', (c) => { raw = (raw + c).slice(0, 4000); });
+            req.on('error', () => { try { sendJson(res, 200, { ok: true }); } catch { /* ignore */ } });
             req.on('end', () => {
               try {
-                const line = `[${new Date().toISOString()}] ${raw}\n`;
-                appendFileSync(join(dir, '.client-errors.log'), line);
+                let skip = false;
+                try { skip = statSync(join(dir, '.client-errors.log')).size > 1_000_000; } catch { skip = false; }
+                if (!skip) {
+                  const line = `[${new Date().toISOString()}] ${raw}\n`;
+                  appendFileSync(join(dir, '.client-errors.log'), line);
+                }
               } catch { /* ignore */ }
               sendJson(res, 200, { ok: true });
             });
