@@ -63,6 +63,62 @@
         const inject = ['slots', 'sessions'];
         const BASE = '/dsh-notes';
 
+        // Scoped dark theme matching the host Task Board tokens (literal values only;
+        // the host's hashed module classes are build-specific and never referenced).
+        // Every rule is scoped under [data-dsh-notes] so host CSS is untouched.
+        const NOTES_THEME_CSS = [
+          '[data-dsh-notes="page"]{display:block;height:100%;min-height:100%;overflow:auto;box-sizing:border-box;background:#151517;color:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Helvetica,Arial,sans-serif;padding:10px 8px;font-size:14px;line-height:1.5;}',
+          '[data-dsh-notes="page"]*,[data-dsh-notes="page"]*::before,[data-dsh-notes="page"]*::after{box-sizing:border-box;}',
+          '[data-dsh-notes="header"]{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;}',
+          '[data-dsh-notes="header"] h2{font-size:13px;font-weight:700;margin:0 4px 0 0;color:#f9fafb;}',
+          '[data-dsh-notes="header"] input{flex:1;min-width:140px;}',
+          '[data-dsh-notes="page"] h3{font-size:13px;font-weight:700;margin:0 0 8px;color:#f9fafb;}',
+          '[data-dsh-notes="page"] input,[data-dsh-notes="page"] select,[data-dsh-notes="page"] textarea{background:#2c2c2e;color:#f9fafb;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 10px;font:inherit;max-width:100%;}',
+          '[data-dsh-notes="page"] select{padding:7px 10px;}',
+          '[data-dsh-notes="page"] textarea{display:block;width:100%;min-height:160px;resize:vertical;line-height:1.5;}',
+          '[data-dsh-notes="page"] input::placeholder,[data-dsh-notes="page"] textarea::placeholder{color:rgba(249,250,251,.45);}',
+          '[data-dsh-notes="page"] button{background:transparent;color:#f9fafb;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 12px;font:inherit;cursor:pointer;}',
+          '[data-dsh-notes="page"] button:hover{background:rgba(255,255,255,.06);}',
+          '[data-dsh-notes="page"] button:disabled{opacity:.45;cursor:not-allowed;}',
+          '[data-dsh-notes="page"] button:focus-visible,[data-dsh-notes="page"] input:focus-visible,[data-dsh-notes="page"] select:focus-visible,[data-dsh-notes="page"] textarea:focus-visible{outline:2px solid #679efe;outline-offset:1px;}',
+          '[data-dsh-notes="header"] button:nth-of-type(2),[data-dsh-notes="detail"]>div:nth-child(2)>textarea+div+button{background:#679efe;border-color:transparent;color:#0f1115;font-weight:600;padding:6px 14px;}',
+          '[data-dsh-notes="header"] button:nth-of-type(2):hover,[data-dsh-notes="detail"]>div:nth-child(2)>textarea+div+button:hover{background:#7cabff;}',
+          '[data-dsh-notes="detail"]>div:nth-child(2)>button:nth-of-type(3){background:transparent;color:#ff8585;border:1px solid rgba(255,133,133,.35);border-radius:8px;}',
+          '[data-dsh-notes="page"]>div:has(>[data-dsh-notes="list"]){display:flex;gap:10px;align-items:flex-start;}',
+          '[data-dsh-notes="list"]{flex:0 1 300px;min-width:260px;min-height:0;}',
+          '[data-dsh-notes="detail"],[data-dsh-notes="detail-empty"]{flex:1;min-width:0;}',
+          '[data-dsh-notes="page"] button[data-dsh-notes="row"]{display:block;width:100%;text-align:left;background:transparent;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;margin:0 0 8px;color:#f9fafb;}',
+          '[data-dsh-notes="page"] button[data-dsh-notes="row"]:hover{background:rgba(255,255,255,.04);}',
+          '[data-dsh-notes="page"] button[data-dsh-notes="row"][data-selected="true"]{border-color:#679efe;}',
+          '[data-dsh-notes="page"] button[data-dsh-notes="row"] div:first-child{font-weight:600;margin-bottom:4px;}',
+          '[data-dsh-notes="page"] button[data-dsh-notes="row"] span{display:inline-block;background:rgba(255,255,255,.07);border-radius:999px;font-size:12px;padding:1px 8px;margin:0 4px 2px 0;color:#f9fafb;}',
+          '[data-dsh-notes="detail"]>div:nth-child(1){display:flex;gap:8px;margin-bottom:10px;}',
+          '[data-dsh-notes="detail"]>div:nth-child(2)>input{display:block;width:100%;margin-bottom:8px;}',
+          '[data-dsh-notes="detail"]>div:nth-child(2)>textarea+div{color:rgba(249,250,251,.55);font-size:12px;margin:6px 0;}',
+          '[data-dsh-notes="detail"]>div:nth-child(3){display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;color:rgba(249,250,251,.55);font-size:12px;}',
+          '[data-dsh-notes="detail-empty"]{color:rgba(249,250,251,.55);padding:24px 12px;}',
+          '[data-dsh-notes="invalid"]{margin-top:10px;color:rgba(249,250,251,.55);font-size:12px;}',
+          '[data-dsh-notes="page"] [role="alert"]{color:#ff8585;margin:0 0 10px;}',
+          '[data-dsh-notes="page"] code{font-family:monospace;background:rgba(255,255,255,.07);border-radius:4px;padding:0 4px;}',
+        ].join('\n');
+
+        function ensureNotesTheme() {
+          try {
+            if (document.querySelector('style[data-dsh-notes="theme"]')) return;
+            const el = document.createElement('style');
+            el.setAttribute('data-dsh-notes', 'theme');
+            el.textContent = NOTES_THEME_CSS;
+            document.head.appendChild(el);
+          } catch {}
+        }
+
+        function removeNotesTheme() {
+          try {
+            const el = document.querySelector('style[data-dsh-notes="theme"]');
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+          } catch {}
+        }
+
         function getService(ctx, n) {
           try { if (ctx && typeof ctx.get === 'function') { const v = ctx.get(n); if (v !== undefined) return v; } } catch {}
           try { const d = ctx ? ctx[n] : undefined; if (d !== undefined) return d; } catch {}
@@ -85,27 +141,45 @@
             React.createElement('path', { d: 'M6 3.5h4a1 1 0 0 1 1 1V13l-3-2-3 2V4.5a1 1 0 0 1 1-1z' }));
         }
 
-        let pageState = { mounted: false, mode: null, prevDisplay: '', mainEl: null, hostEl: null, root: null, ctx: null };
+        let pageState = { mounted: false, mode: null, prevDisplay: '', mainEl: null, hostEl: null, root: null, ctx: null, hiddenChildren: null };
 
         function mountNotesPanel(ctx, React, createRoot, NotesPage) {
           if (pageState.mounted) return;
-          const candidates = ['[data-dsh-main]', 'main', '[role=main]'];
+          const candidates = ['[data-dsh-main]', 'main', '[role=main]', '.pI_x6G_centerCol'];
           let mainEl = null;
+          let mainSel = '';
           for (const sel of candidates) {
-            try { mainEl = document.querySelector(sel); if (mainEl) break; } catch {}
+            try { mainEl = document.querySelector(sel); if (mainEl) { mainSel = sel; break; } } catch {}
           }
           const hostEl = document.createElement('div');
           hostEl.setAttribute('data-dsh-notes', 'page');
           hostEl.setAttribute('data-dsh-plugin', 'notes');
           if (mainEl && mainEl.parentNode) {
-            pageState = { mounted: true, mode: 'page', prevDisplay: mainEl.style.display, mainEl, hostEl, root: null, ctx };
-            mainEl.style.display = 'none';
-            mainEl.parentNode.insertBefore(hostEl, mainEl.nextSibling);
+            if (mainSel === '.pI_x6G_centerCol' || mainEl.children.length > 1) {
+              const hiddenChildren = [];
+              try {
+                const kids = Array.prototype.slice.call(mainEl.children);
+                for (const kid of kids) {
+                  hiddenChildren.push({ el: kid, display: kid.style.display });
+                  kid.style.display = 'none';
+                }
+              } catch {}
+              hostEl.style.cssText = 'display:block;height:100%;';
+              mainEl.appendChild(hostEl);
+              ensureNotesTheme();
+              pageState = { mounted: true, mode: 'page', prevDisplay: '', mainEl, hostEl, root: null, ctx, hiddenChildren };
+            } else {
+              pageState = { mounted: true, mode: 'page', prevDisplay: mainEl.style.display, mainEl, hostEl, root: null, ctx, hiddenChildren: null };
+              mainEl.style.display = 'none';
+              mainEl.parentNode.insertBefore(hostEl, mainEl.nextSibling);
+              ensureNotesTheme();
+            }
           } else {
             hostEl.setAttribute('data-dsh-notes-mode', 'modal-fallback');
-            hostEl.style.cssText = 'position:fixed;inset:0;z-index:60;background:var(--dsh-bg,#fff)';
+            hostEl.style.cssText = 'position:fixed;inset:0;z-index:60;background:#151517';
             document.body.appendChild(hostEl);
-            pageState = { mounted: true, mode: 'modal', prevDisplay: '', mainEl: null, hostEl, root: null, ctx };
+            ensureNotesTheme();
+            pageState = { mounted: true, mode: 'modal', prevDisplay: '', mainEl: null, hostEl, root: null, ctx, hiddenChildren: null };
           }
           try {
             const root = createRoot(hostEl);
@@ -117,8 +191,15 @@
         function unmountNotesPanel() {
           try { pageState.root && pageState.root.unmount(); } catch {}
           try { pageState.hostEl && pageState.hostEl.parentNode && pageState.hostEl.parentNode.removeChild(pageState.hostEl); } catch {}
-          try { if (pageState.mode === 'page' && pageState.mainEl) pageState.mainEl.style.display = pageState.prevDisplay; } catch {}
-          pageState = { mounted: false, mode: null, prevDisplay: '', mainEl: null, hostEl: null, root: null, ctx: null };
+          try {
+            if (pageState.hiddenChildren) {
+              for (const h of pageState.hiddenChildren) { try { h.el.style.display = h.display; } catch {} }
+            } else if (pageState.mode === 'page' && pageState.mainEl) {
+              pageState.mainEl.style.display = pageState.prevDisplay;
+            }
+          } catch {}
+          try { removeNotesTheme(); } catch {}
+          pageState = { mounted: false, mode: null, prevDisplay: '', mainEl: null, hostEl: null, root: null, ctx: null, hiddenChildren: null };
         }
 
         const NOTES_CATS = ['idea', 'task', 'session', 'link', 'note'];
