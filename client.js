@@ -121,6 +121,281 @@
           pageState = { mounted: false, mode: null, prevDisplay: '', mainEl: null, hostEl: null, root: null, ctx: null };
         }
 
+        const NOTES_CATS = ['idea', 'task', 'session', 'link', 'note'];
+        const NOTES_NEW_ID = '__new__';
+        const NOTES_LIMIT = 10000;
+
+        function escNotesHtml(s) {
+          return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+        }
+
+        function miniMd(src) {
+          let out = escNotesHtml(src);
+          out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+          out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+          out = out.replace(/\n/g, '<br>');
+          return out;
+        }
+
+        function postNotesAction(payload) {
+          return fetch(BASE + '/action', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+          }).then((r) => r.json());
+        }
+
+        function buildNotesPage(React, primitives) {
+          void primitives;
+          return function NotesPage(props) {
+            const [notes, setNotes] = React.useState([]);
+            const [invalid, setInvalid] = React.useState([]);
+            const [loading, setLoading] = React.useState(true);
+            const [error, setError] = React.useState('');
+            const [q, setQ] = React.useState('');
+            const [workspaceFilter, setWorkspaceFilter] = React.useState('');
+            const [categoryFilter, setCategoryFilter] = React.useState('');
+            const [selectedId, setSelectedId] = React.useState(null);
+            const [mode, setMode] = React.useState('preview');
+            const [draftTitle, setDraftTitle] = React.useState('');
+            const [draftBody, setDraftBody] = React.useState('');
+            const [locale, setLocale] = React.useState(lang);
+            const t = makeNotesT(locale);
+
+            function load() {
+              setLoading(true);
+              let p = null;
+              try {
+                p = fetch(BASE + '/state?workspace=' + encodeURIComponent(''));
+              } catch (e) {
+                setError(t('notes.errorLoadFailed'));
+                setLoading(false);
+                return Promise.resolve();
+              }
+              return p.then((r) => r.json()).then((data) => {
+                if (data && data.ok === false) throw new Error((data && data.error) || 'load');
+                setNotes(data && Array.isArray(data.notes) ? data.notes : []);
+                setInvalid(data && Array.isArray(data.invalid) ? data.invalid : []);
+                setError('');
+              }).catch((e) => {
+                setError(t('notes.errorLoadFailed'));
+                report('notes-load', (e && e.message) || e);
+              }).then(() => { setLoading(false); });
+            }
+
+            React.useEffect(() => { load(); }, []);
+
+            const workspaces = React.useMemo(() => {
+              const seen = {};
+              notes.forEach((n) => { if (n && n.workspace) seen[n.workspace] = true; });
+              return Object.keys(seen).sort();
+            }, [notes]);
+
+            const needle = q.trim().toLowerCase();
+            const filtered = notes.filter((n) => {
+              if (!n) return false;
+              if (workspaceFilter && n.workspace !== workspaceFilter) return false;
+              if (categoryFilter && n.category !== categoryFilter) return false;
+              if (needle) {
+                const hay = ((n.title || '') + '\n' + (n.body || '') + '\n' + (Array.isArray(n.tags) ? n.tags.join(' ') : '')).toLowerCase();
+                if (hay.indexOf(needle) === -1) return false;
+              }
+              return true;
+            });
+
+            const isNew = selectedId === NOTES_NEW_ID;
+            const selected = isNew
+              ? { id: NOTES_NEW_ID, title: draftTitle, body: draftBody, workspace: workspaceFilter || '', category: 'note', tags: [t('tag.noteDefault')], sessionId: null, createdAt: Date.now(), updatedAt: Date.now() }
+              : (notes.find((n) => n && n.id === selectedId) || null);
+
+            function fmtDate(ts) {
+              try { return new Date(ts).toLocaleString(locale); } catch { return ''; }
+            }
+            function fmtDay(ts) {
+              try { return new Date(ts).toLocaleDateString(locale); } catch { return ''; }
+            }
+
+            function pick(id) {
+              const n = notes.find((x) => x && x.id === id) || null;
+              setSelectedId(id);
+              setDraftTitle(n ? (n.title || '') : '');
+              setDraftBody(n && n.body ? n.body : '');
+              setMode('preview');
+            }
+
+            function startNew() {
+              setSelectedId(NOTES_NEW_ID);
+              setDraftTitle('');
+              setDraftBody('');
+              setMode('edit');
+            }
+
+            function toggleLocale() {
+              const next = locale === 'zh' ? 'en' : 'zh';
+              setLocale(next);
+              try { if (typeof localStorage !== 'undefined') localStorage.setItem('dsh-notes.locale', next); } catch {}
+            }
+
+            function afterMutation(data) {
+              if (data && data.ok === false) throw new Error((data && data.error) || 'save');
+              setError('');
+              return load();
+            }
+            function failSave(e) {
+              setError(t('notes.errorSaveFailed', { error: String((e && e.message) || e) }));
+            }
+
+            function save() {
+              const len = [...draftBody].length;
+              if (len > NOTES_LIMIT) { setError(t('notes.errorTooLong')); return; }
+              const payload = isNew
+                ? { action: 'create', args: { title: draftTitle, body: draftBody, workspace: workspaceFilter || undefined, category: 'note', tags: [t('tag.noteDefault')] } }
+                : { action: 'update', args: { id: selectedId, title: draftTitle, body: draftBody } };
+              postNotesAction(payload).then((data) => {
+                if (isNew && data && data.note && data.note.id) setSelectedId(data.note.id);
+                afterMutation(data);
+              }).catch(failSave);
+            }
+
+            function removeNote() {
+              if (isNew || !selected) return;
+              let ok = false;
+              try { ok = confirm(t('notes.deleteConfirm')); } catch { ok = false; }
+              if (!ok) return;
+              postNotesAction({ action: 'delete', args: { id: selectedId } }).then((data) => {
+                setSelectedId(null);
+                setMode('preview');
+                afterMutation(data);
+              }).catch(failSave);
+            }
+
+            function fixInvalid(entry) {
+              const id = String((entry && entry.file) || '').replace(/\.md$/, '');
+              const found = notes.find((n) => n && n.id === id);
+              const args = found
+                ? { id: found.id, title: found.title, body: found.body }
+                : { id, title: id, body: '' };
+              postNotesAction({ action: 'update', args }).then(afterMutation).catch(failSave);
+            }
+
+            function openSession(sid) {
+              try {
+                const sessions = getService(pageState.ctx, 'sessions');
+                if (sessions && typeof sessions.open === 'function') { sessions.open(sid); return; }
+              } catch {}
+              try {
+                if (typeof location !== 'undefined' && location) location.hash = '#/sessions/' + encodeURIComponent(sid);
+              } catch {}
+            }
+
+            const count = [...draftBody].length;
+            const saveDisabled = count > NOTES_LIMIT || draftTitle.trim() === '';
+
+            const header = React.createElement('div', { 'data-dsh-notes': 'header' },
+              React.createElement('h2', null, t('notes.title')),
+              React.createElement('input', {
+                value: q, onChange: (e) => setQ(e.target.value),
+                placeholder: t('notes.search'), 'aria-label': t('notes.search'),
+              }),
+              React.createElement('select', {
+                value: workspaceFilter, onChange: (e) => setWorkspaceFilter(e.target.value),
+                'aria-label': t('notes.filterWorkspace'),
+              },
+                React.createElement('option', { value: '' }, t('notes.filterWorkspace')),
+                workspaces.map((w) => React.createElement('option', { key: w, value: w }, w))),
+              React.createElement('select', {
+                value: categoryFilter, onChange: (e) => setCategoryFilter(e.target.value),
+                'aria-label': t('notes.filterCategory'),
+              },
+                React.createElement('option', { value: '' }, t('notes.filterCategory')),
+                NOTES_CATS.map((c) => React.createElement('option', { key: c, value: c }, t('cat.' + c)))),
+              React.createElement('button', { type: 'button', onClick: toggleLocale }, locale === 'zh' ? 'EN' : '中文'),
+              React.createElement('button', { type: 'button', onClick: startNew }, t('notes.new')),
+              props && props.onClose
+                ? React.createElement('button', { type: 'button', onClick: props.onClose, 'aria-label': 'close' }, '×')
+                : null);
+
+            let listBody = null;
+            if (loading) listBody = React.createElement('div', null, '…');
+            else if (notes.length === 0) listBody = React.createElement('div', null, t('notes.empty'));
+            else if (filtered.length === 0) listBody = React.createElement('div', null, t('notes.emptySearch'));
+            else listBody = filtered.map((n) => React.createElement('button', {
+              key: n.id, type: 'button', onClick: () => pick(n.id),
+              'data-dsh-notes': 'row', 'data-selected': n.id === selectedId ? 'true' : 'false',
+            },
+              React.createElement('div', null, n.title || ''),
+              React.createElement('span', null, n.workspace || ''),
+              React.createElement('span', null, t('cat.' + (n.category || 'note'))),
+              React.createElement('span', null, Array.isArray(n.tags) ? n.tags.join(', ') : ''),
+              React.createElement('span', null, fmtDay(n.updatedAt))));
+
+            const invalidSection = (invalid && invalid.length)
+              ? React.createElement('div', { 'data-dsh-notes': 'invalid' },
+                invalid.map((entry, i) => React.createElement('div', { key: (entry && entry.file) || String(i) },
+                  React.createElement('span', null, t('notes.invalidNote', { error: (entry && entry.error) || '' })),
+                  React.createElement('button', { type: 'button', onClick: () => fixInvalid(entry) }, t('notes.fixByResave')))))
+              : null;
+
+            let detail = null;
+            if (!selected) {
+              detail = React.createElement('div', { 'data-dsh-notes': 'detail-empty' }, loading ? '…' : t('notes.empty'));
+            } else {
+              const toggle = React.createElement('div', null,
+                React.createElement('button', { type: 'button', onClick: () => setMode('preview'), disabled: mode === 'preview' }, t('notes.preview')),
+                React.createElement('button', { type: 'button', onClick: () => setMode('edit'), disabled: mode === 'edit' }, t('notes.edit')));
+              let pane = null;
+              if (mode === 'edit') {
+                pane = React.createElement('div', null,
+                  React.createElement('input', {
+                    value: draftTitle, maxLength: 120, onChange: (e) => setDraftTitle(e.target.value),
+                    placeholder: t('notes.updatedTitle'), 'aria-label': t('notes.updatedTitle'),
+                  }),
+                  React.createElement('textarea', {
+                    value: draftBody, onChange: (e) => setDraftBody(e.target.value),
+                    'aria-label': t('notes.edit'),
+                  }),
+                  React.createElement('div', null, t('notes.charLimit', { n: [...draftBody].length })),
+                  React.createElement('button', { type: 'button', onClick: save, disabled: saveDisabled }, t('notes.save')),
+                  React.createElement('button', {
+                    type: 'button',
+                    onClick: () => {
+                      setDraftTitle(selected.title || '');
+                      setDraftBody(selected.body || '');
+                      setMode('preview');
+                    },
+                  }, t('notes.cancel')),
+                  isNew ? null : React.createElement('button', { type: 'button', onClick: removeNote }, t('notes.delete')));
+              } else {
+                const html = miniMd(selected.body);
+                pane = React.createElement('div', null,
+                  React.createElement('h3', null, selected.title || ''),
+                  React.createElement('div', { dangerouslySetInnerHTML: { __html: html } }));
+              }
+              const sid = selected.sessionId;
+              const sessionCtl = sid
+                ? React.createElement('button', { type: 'button', onClick: () => openSession(sid) }, t('notes.sessionOpen'))
+                : React.createElement('span', { title: t('notes.sessionMissing') }, t('notes.sessionMissing'));
+              const footer = React.createElement('div', null,
+                React.createElement('span', null, selected.workspace || ''),
+                sessionCtl,
+                React.createElement('span', null, t('notes.createdAt') + ': ' + fmtDate(selected.createdAt)),
+                React.createElement('span', null, fmtDate(selected.updatedAt)));
+              detail = React.createElement('div', { 'data-dsh-notes': 'detail' }, toggle, pane, footer);
+            }
+
+            return React.createElement('div', { 'data-dsh-notes': 'page' },
+              header,
+              error ? React.createElement('div', { role: 'alert' }, error) : null,
+              React.createElement('div', { style: { display: 'flex' } },
+                React.createElement('div', { 'data-dsh-notes': 'list' }, listBody, invalidSection),
+                detail));
+          };
+        }
+
         function apply(ctx) {
           const slots = getService(ctx, 'slots');
           if (!slots || typeof slots.inject !== 'function' || typeof slots.register !== 'function') return;
