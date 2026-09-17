@@ -135,13 +135,28 @@
           } catch { /* ignore */ }
         }
 
+        // Sidebar entry icon size (single obvious constant; controller may overrule 18 -> 16/20).
+        const NOTES_ENTRY_ICON_SIZE = 18;
+
         function BookmarkIcon(props) {
           const React = props.React;
-          return React.createElement('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
+          return React.createElement('svg', { width: NOTES_ENTRY_ICON_SIZE, height: NOTES_ENTRY_ICON_SIZE, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
             React.createElement('path', { d: 'M6 3.5h4a1 1 0 0 1 1 1V13l-3-2-3 2V4.5a1 1 0 0 1 1-1z' }));
         }
 
         let pageState = { mounted: false, mode: null, prevDisplay: '', mainEl: null, hostEl: null, root: null, ctx: null, hiddenChildren: null };
+
+        // Active-highlight subscription for the sidebar entry button. The theme
+        // <style> is mounted/unmounted with the panel, so the entry button uses
+        // inline styles (always present) and re-renders via these listeners.
+        const entryListeners = new Set();
+        function notifyEntry(active) {
+          try {
+            for (const fn of Array.from(entryListeners)) { try { fn(!!active); } catch {} }
+          } catch {}
+        }
+        // Synchronous re-entrancy guard for the entry toggle (mount/unmount are sync).
+        let entryToggling = false;
 
         function mountNotesPanel(ctx, React, createRoot, NotesPage) {
           if (pageState.mounted) return;
@@ -186,6 +201,7 @@
             pageState.root = root;
             root.render(React.createElement(NotesPage, { onClose: unmountNotesPanel }));
           } catch (e) { report('mount', e && e.message ? e.message : e); try { hostEl.textContent = 'Notes failed to mount'; } catch {} }
+          notifyEntry(true);
         }
 
         function unmountNotesPanel() {
@@ -200,6 +216,7 @@
           } catch {}
           try { removeNotesTheme(); } catch {}
           pageState = { mounted: false, mode: null, prevDisplay: '', mainEl: null, hostEl: null, root: null, ctx: null, hiddenChildren: null };
+          notifyEntry(false);
         }
 
         const NOTES_CATS = ['idea', 'task', 'session', 'link', 'note'];
@@ -550,15 +567,37 @@
             return React.cloneElement(child, { title: child.props && child.props.title ? child.props.title : tip });
           }
           const entryLabel = makeNotesT(lang)('notes.title');
+          // Transparent borderless entry button (matches old bookmarks footer button);
+          // active colors apply ONLY while the panel is open.
+          const ENTRY_BUTTON_BASE = { border: 'none', padding: '6px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
           function SidebarEntry() {
             const label = entryLabel;
+            const [entryActive, setEntryActive] = React.useState(() => pageState.mounted);
+            React.useEffect(() => {
+              const sync = (v) => { try { setEntryActive(!!v); } catch {} };
+              entryListeners.add(sync);
+              try { sync(pageState.mounted); } catch {}
+              return () => { try { entryListeners.delete(sync); } catch {} };
+            }, []);
+            const style = entryActive
+              ? Object.assign({}, ENTRY_BUTTON_BASE, { background: 'rgba(103,158,254,.14)', color: '#679efe' })
+              : Object.assign({}, ENTRY_BUTTON_BASE, { background: 'transparent', color: 'inherit' });
             return React.createElement(Tooltip, { label, side: 'right', delayMs: 400 },
               React.createElement('button', {
                 type: 'button',
                 'data-dsh-notes': 'entry',
                 title: label,
                 'aria-label': label,
-                onClick: () => { try { mountNotesPanel(ctx, React, createRoot, NotesPage); } catch (error) { report('entry-open', error && error.message ? error.message : error); } },
+                style,
+                onClick: () => {
+                  if (entryToggling) return;
+                  entryToggling = true;
+                  try {
+                    if (pageState.mounted) unmountNotesPanel();
+                    else mountNotesPanel(ctx, React, createRoot, NotesPage);
+                  } catch (error) { report('entry-open', error && error.message ? error.message : error); }
+                  finally { entryToggling = false; }
+                },
               },
                 React.createElement(BookmarkIcon, { React }),
               ));
