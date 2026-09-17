@@ -1,0 +1,35 @@
+{
+  "name": "dsh-notes",
+  "version": "0.1.0",
+  "description": "DSH global Markdown notes with workspace binding: sidebar Notes & bookmarks panel, host tools + file fallback. / DSH 全局 Markdown 笔记:侧栏面板,宿主工具 + 文件回退。",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "README.md",
+    "README.zh-CN.md",
+    "SKILL.md",
+    "index.js",
+    "client.js",
+    "src/",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "check": "node --check client.js && node --check index.js && node --check src/schema.mjs && node --check src/store.mjs && node --check src/index-state.mjs",
+    "test": "node --test test/*.test.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "verify": "npm run check && npm test && npm run smoke"
+  },
+  "engines": { "node": ">=22.19.0" },
+  "license": "MIT",
+  "keywords": ["deepseek-harness", "dsh-plugin", "notes", "markdown", "sidebar", "i18n"],
+  "dsh": {
+    "engines": { "dsh": ">=0.1.5-rc.1" },
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web" }
+  }
+}
