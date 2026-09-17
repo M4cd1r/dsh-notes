@@ -9,7 +9,7 @@
   try {
     load({
       id: 'dsh-notes',
-      factory: () => {
+      factory: (require) => {
         const module = { exports: {} };
         const NOTES_LOCALES = {
           zh: {
@@ -60,7 +60,87 @@
         let lang = 'en';
         try { lang = detectNotesLocale(typeof localStorage !== 'undefined' ? localStorage.getItem('dsh-notes.locale') : null); } catch { lang = 'en'; }
         void lang;
-        module.exports = { apply: () => {}, inject: ['slots'] };
+        const inject = ['slots', 'sessions'];
+        const BASE = '/dsh-notes';
+
+        function getService(ctx, n) {
+          try { if (ctx && typeof ctx.get === 'function') { const v = ctx.get(n); if (v !== undefined) return v; } } catch {}
+          try { const d = ctx ? ctx[n] : undefined; if (d !== undefined) return d; } catch {}
+          return undefined;
+        }
+
+        function report(kind, message) {
+          try {
+            void fetch(BASE + '/report', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ level: 'error', kind: String(kind), message: String(message || kind).slice(0, 1000) }),
+            }).catch(() => {});
+          } catch { /* ignore */ }
+        }
+
+        function BookmarkIcon(props) {
+          const React = props.React;
+          return React.createElement('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
+            React.createElement('path', { d: 'M6 3.5h4a1 1 0 0 1 1 1V13l-3-2-3 2V4.5a1 1 0 0 1 1-1z' }));
+        }
+
+        let pageState = { mounted: false, mode: null, prevDisplay: '', mainEl: null, hostEl: null, root: null, ctx: null };
+
+        function mountNotesPanel(ctx, React, createRoot, NotesPage) {
+          if (pageState.mounted) return;
+          const candidates = ['[data-dsh-main]', 'main', '[role=main]'];
+          let mainEl = null;
+          for (const sel of candidates) {
+            try { mainEl = document.querySelector(sel); if (mainEl) break; } catch {}
+          }
+          const hostEl = document.createElement('div');
+          hostEl.setAttribute('data-dsh-notes', 'page');
+          hostEl.setAttribute('data-dsh-plugin', 'notes');
+          if (mainEl) {
+            pageState = { mounted: true, mode: 'page', prevDisplay: mainEl.style.display, mainEl, hostEl, root: null, ctx };
+            mainEl.style.display = 'none';
+            mainEl.parentNode.insertBefore(hostEl, mainEl.nextSibling);
+          } else {
+            hostEl.setAttribute('data-dsh-notes-mode', 'modal-fallback');
+            hostEl.style.cssText = 'position:fixed;inset:0;z-index:60;background:var(--dsh-bg,#fff)';
+            document.body.appendChild(hostEl);
+            pageState = { mounted: true, mode: 'modal', prevDisplay: '', mainEl: null, hostEl, root: null, ctx };
+          }
+          try {
+            const root = createRoot(hostEl);
+            pageState.root = root;
+            root.render(React.createElement(NotesPage, { onClose: unmountNotesPanel }));
+          } catch (e) { report('mount', e && e.message ? e.message : e); try { hostEl.textContent = 'Notes failed to mount'; } catch {} }
+        }
+
+        function unmountNotesPanel() {
+          try { pageState.root && pageState.root.unmount(); } catch {}
+          try { pageState.hostEl && pageState.hostEl.parentNode && pageState.hostEl.parentNode.removeChild(pageState.hostEl); } catch {}
+          try { if (pageState.mode === 'page' && pageState.mainEl) pageState.mainEl.style.display = pageState.prevDisplay; } catch {}
+          pageState = { mounted: false, mode: null, prevDisplay: '', mainEl: null, hostEl: null, root: null, ctx: null };
+        }
+
+        function apply(ctx) {
+          const slots = getService(ctx, 'slots');
+          if (!slots || typeof slots.inject !== 'function' || typeof slots.register !== 'function') return;
+          let React = null, createRoot = null, primitives = null;
+          try { React = require('react'); } catch { return; }
+          try { createRoot = require('react-dom/client').createRoot; } catch { return; }
+          try { primitives = require('@deepseek-ai/dsh-client-ui-primitives'); } catch { primitives = null; }
+          // NotesPage component lands in Task 8; stub placeholder here:
+          let NotesPage = null;
+          try { NotesPage = (typeof buildNotesPage === 'function') ? buildNotesPage(React, primitives) : () => React.createElement('div', null, 'Notes (Task 8)'); }
+          catch (e) { report('notes-page-build', e && e.message ? e.message : e); NotesPage = () => React.createElement('div', null, 'Notes (Task 8)'); }
+          try {
+            ctx.effect(() => slots.inject('sidebar.footer.action', () => slots.register(
+              { name: 'sidebar.footer.action', id: 'notes', order: 21, label: 'Notes & bookmarks', icon: (p) => React.createElement(BookmarkIcon, { React }) },
+              { onClick: () => mountNotesPanel(ctx, React, createRoot, NotesPage) }
+            )), 'dsh-notes: sidebar entry');
+          } catch (e) { report('sidebar-register', e && e.message ? e.message : e); }
+        }
+
+        module.exports = { apply, inject };
         return module.exports;
       },
     });
