@@ -8,7 +8,6 @@ import { createIndex, watchNotesDir } from './src/index-state.mjs';
 import { defaultManualMeta, validateNoteObject } from './src/schema.mjs';
 
 export const name = 'notes';
-const ROUTE_PREFIX = '/dsh-notes';
 const VERSION = '0.1.0';
 
 export function notesDirFromCtx() {
@@ -141,14 +140,14 @@ export function apply(ctx) {
 
     try {
       if (ctx && typeof ctx.route === 'function') {
-        ctx.route('GET', ROUTE_PREFIX + '/state', (req, res) => {
+        ctx.route('GET', '/dsh-notes/state', (req, res) => {
           try {
             const url = new URL(req.url || '/', 'http://local');
             const workspace = url.searchParams.get('workspace') || undefined;
             sendJson(res, 200, { ok: true, ...service.state({ workspace }) });
           } catch (e) { sendJson(res, 500, { ok: false, error: String((e && e.message) || e) }); }
         });
-        ctx.route('POST', ROUTE_PREFIX + '/action', async (req, res) => {
+        ctx.route('POST', '/dsh-notes/action', async (req, res) => {
           let payload = {};
           try { payload = JSON.parse(await new Promise((resolve, reject) => {
             let raw = '';
@@ -167,7 +166,7 @@ export function apply(ctx) {
             sendJson(res, msg === 'too-long' ? 400 : 500, { ok: false, error: msg });
           }
         });
-        ctx.route('POST', ROUTE_PREFIX + '/report', (req, res) => {
+        ctx.route('POST', '/dsh-notes/report', (req, res) => {
           try {
             let raw = '';
             req.on('data', (c) => { raw = (raw + c).slice(0, 4000); });
