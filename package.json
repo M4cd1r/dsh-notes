@@ -4,7 +4,7 @@
   "repository": { "type": "git", "url": "https://github.com/M4cd1r/dsh-notes" },
   "homepage": "https://github.com/M4cd1r/dsh-notes#readme",
   "bugs": { "url": "https://github.com/M4cd1r/dsh-notes/issues" },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DSH global Markdown notes with workspace binding: sidebar Notes & bookmarks panel, host tools + file fallback. / DSH 全局 Markdown 笔记:侧栏面板,宿主工具 + 文件回退。",
   "type": "module",
   "main": "index.js",

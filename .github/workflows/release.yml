@@ -36,13 +36,8 @@ jobs:
       - name: Verify (syntax + unit tests + smoke)
         run: npm run verify
 
-      - name: Publish to npm
+      - name: Publish to npm (Trusted Publishing / OIDC — no token)
         run: npm publish --access public --provenance
-        env:
-          # Bootstrap only (package must exist before a Trusted Publisher can be
-          # configured on npmjs.com — npm/cli#8544). Once Trusted Publishing is
-          # enabled for this package, this secret is removed and OIDC takes over.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub release
         if: startsWith(github.ref, 'refs/tags/')
