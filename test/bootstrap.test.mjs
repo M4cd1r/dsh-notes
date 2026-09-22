@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 
 test('package.json declares dsh-notes bundle correctly', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.equal(pkg.name, 'dsh-notes');
+  assert.equal(pkg.name, '@m4cd1r/dsh-notes');
   assert.equal(pkg.type, 'module');
   assert.equal(pkg.main, 'index.js');
   assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml');

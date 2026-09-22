@@ -7,7 +7,7 @@ DSH global Markdown notes with workspace binding: sidebar Notes & bookmarks pane
 ## 安装
 
 ```bash
-npm i dsh-notes
+npm i @m4cd1r/dsh-notes
 ```
 
 用单行 cordis 补丁注册侧栏入口（随包提供 `cordis.patch.yml`，经由 `package.json` → `dsh.bundle.patch` 接入）：

@@ -7,7 +7,7 @@ DSH 全局 Markdown 笔记（带工作区绑定）：侧栏「笔记与书签」
 ## Install
 
 ```bash
-npm i dsh-notes
+npm i @m4cd1r/dsh-notes
 ```
 
 Register the sidebar entry with the one-row cordis patch (bundled as `cordis.patch.yml`, wired via `package.json` → `dsh.bundle.patch`):

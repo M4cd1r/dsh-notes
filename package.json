@@ -1,5 +1,6 @@
 {
-  "name": "dsh-notes",
+  "name": "@m4cd1r/dsh-notes",
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" },
   "version": "0.1.0",
   "description": "DSH global Markdown notes with workspace binding: sidebar Notes & bookmarks panel, host tools + file fallback. / DSH 全局 Markdown 笔记:侧栏面板,宿主工具 + 文件回退。",
   "type": "module",

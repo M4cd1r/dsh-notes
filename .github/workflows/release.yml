@@ -1,29 +1,56 @@
-name: Release
+# Publish @m4cd1r/dsh-notes to npm via Trusted Publishing (OIDC) — no NPM_TOKEN.
+#
+# npmjs.com trusts this exact repo + workflow file (configured as the package's
+# Trusted Publisher: owner M4cd1r, repo dsh-notes, workflow release.yml).
+# The npm CLI exchanges the GitHub OIDC token automatically (npm >= 11.5.1).
+name: release
+
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
+  workflow_dispatch:
+
 permissions:
   contents: write
-  packages: write
   id-token: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org/
-      - run: npm ci || npm install
-      - run: npm run verify
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Use npm with OIDC trusted publishing
+        run: npm install --global npm@latest
+
+      - name: Install dependencies (no lifecycle scripts)
+        run: npm install --ignore-scripts
+
+      - name: Verify (syntax + unit tests + smoke)
+        run: npm run verify
+
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish --access public --provenance
         env:
+          # Bootstrap only (package must exist before a Trusted Publisher can be
+          # configured on npmjs.com — npm/cli#8544). Once Trusted Publishing is
+          # enabled for this package, this secret is removed and OIDC takes over.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Create GitHub release
-        run: gh release create "${GITHUB_REF_NAME}" --generate-notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "GitHub release ${GITHUB_REF_NAME} already exists"
+          else
+            gh release create "${GITHUB_REF_NAME}" --generate-notes
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
